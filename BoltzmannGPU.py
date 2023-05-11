@@ -6,26 +6,34 @@ import matplotlib
 from matplotlib import animation
 from matplotlib.animation import PillowWriter
 import time
+
 start = time.time()
-#device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-device = torch.device("cuda")
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #Initial conditions
+velocity = 2000
 
-n_particles = 200
+n_particles = 5000
 r = torch.rand((2, n_particles)).to(device)
 ixr = r[0]>0.5
 ixl = r[0]<= 0.5
 
 ids = torch.arange(n_particles)
 
-#plt.figure(figsize=(5,5))
-#plt.scatter(r[0][ixr].cpu(), r[1][ixr].cpu(), color='r', s=6)
-#plt.scatter(r[0][ixl].cpu(), r[1][ixl].cpu(), color='b', s=6)
+bins = np.linspace(0, 3500, 60)
+vv = np.linspace(0, 3500, 1000)
+a = 6/velocity**2
+fv = a*vv*np.exp(-a*vv**2/2)
+
+
+vsfer = torch.rand((2, n_particles)).to(device)
+vsfer[0] = vsfer[0] * velocity
+vsfer[1] = vsfer[1] * 2 * np.pi
 
 v = torch.zeros((2, n_particles)).to(device)
-v[0][ixr] = -500
-v[0][ixl] = 500
+v[0] = vsfer[0]*torch.cos(vsfer[1])
+v[1] = vsfer[0]*torch.sin(vsfer[1])
+
 
 #Distances
 
@@ -82,35 +90,36 @@ def motion(r, v, id_pairs, ts, dt, d_cutoff):
         vs[i] = v
     return rs, vs
 
-rs, vs = motion(r, v, ids_pairs, ts=1000, dt=8E-6, d_cutoff=2*radius)
+rs, vs = motion(r, v, ids_pairs, ts=1000, dt=8E-5, d_cutoff=2*radius)
 
-fig, ax = plt.subplots(1, 1, figsize=(5,5))
-"""
-xred, yred = rs[0][0][ixr], rs[0][1][ixr]
-xblue, yblue = rs[0][0][ixl], rs[0][1][ixl]
-
-circles_red = [plt.Circle((xi, yi), radius=radius, linewidth = 0) for xi, yi in zip(xred, yred)]
-circles_blue = [plt.Circle((xi, yi), radius=radius, linewidth = 0) for xi, yi in zip(xblue, yblue)]
-
-cred = matplotlib.collections.PatchCollection(circles_red, facecolors = 'red')
-cblue = matplotlib.collections.PatchCollection(circles_blue, facecolors = 'blue')
-
-ax.add_collection(cred)
-ax.add_collection(cblue)
-ax.set_xlim(0,1)
-ax.set_ylim(0,1)
-"""
-
-ax.clear()
+fig, ax = plt.subplots(1, 2, figsize=(15, 10))
+ax[0].clear()
 vmin = 0
 vmax = 1
-ax.set_xlim(0,1)
-ax.set_ylim(0,1)
-markersize = 2*radius*ax.get_window_extent().width / (vmax - vmin) * 72./fig.dpi
-red, = ax.plot([], [], 'o', color = 'red', markersize = markersize)
-blue, = ax.plot([], [], 'o', color = 'blue', markersize = markersize)
+ax[0].set_xlim(0,1)
+ax[0].set_ylim(0,1)
+markersize = 2*radius*ax[0].get_window_extent().width / (vmax - vmin) * 72./fig.dpi
+red, = ax[0].plot([], [], 'o', color = 'red', markersize = markersize)
+blue, = ax[0].plot([], [], 'o', color = 'blue', markersize = markersize)
+_, _, bar_container = ax[1].hist(torch.sqrt(torch.sum(vs[0]**2, axis = 0)).cpu(), bins=bins, density=True)
+ax[1].plot(vv, fv)
+ax[1].set_ylim(top=0.003)
 
-def animate(i):
+def prepare_animation(bar_container):
+
+    def animate(i):
+        n, _ = np.histogram(torch.sqrt(torch.sum(vs[i]**2, axis = 0)).cpu(), bins=bins, density=True)
+        xred, yred = rs[i][0][ixr].cpu(), rs[i][1][ixr].cpu()
+        xblue, yblue = rs[i][0][ixl].cpu(), rs[i][1][ixl].cpu()
+        red.set_data(xred, yred)
+        blue.set_data(xblue, yblue)
+        for i, patch in enumerate(bar_container.patches):
+            patch.set_height(n[i])
+        return bar_container.patches
+
+    return animate
+
+def red_blue(i):
     xred, yred = rs[i][0][ixr].cpu(), rs[i][1][ixr].cpu()
     xblue, yblue = rs[i][0][ixl].cpu(), rs[i][1][ixl].cpu()
     red.set_data(xred, yred)
@@ -118,11 +127,12 @@ def animate(i):
     return red, blue
 
 writer = animation.FFMpegWriter(fps = 30)
-ani = animation.FuncAnimation(fig, animate, frames=500, interval=50, blit=True) #blit permette di non rifare le cose che non cambiano
+ani1 = animation.FuncAnimation(fig, prepare_animation(bar_container), frames=500, interval=50, blit=True) #blit permette di non rifare le cose che non cambiano
+ani2 = animation.FuncAnimation(fig, red_blue, frames=500, interval=50, blit=True) #blit permette di non rifare le cose che non cambiano
  
+
+end = time.time()
+print('time = ', end - start)
 
 
 plt.show()
-end = time.time()
-print('time = ', end - start)
-print(device)
