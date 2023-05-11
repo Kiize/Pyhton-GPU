@@ -12,15 +12,15 @@ device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 #Parameters
 velocity = 100
-n_particles = 5000
+n_particles = 1000
 radius = 5E-3
-gravity = -1E6
+gravity = -1E5
 
 #Boltz Distribution
-bins = np.linspace(0, 3*velocity, 60)
-vv = np.linspace(0, 3*velocity, 1000)
-a = 6/velocity**2
-fv = a*vv*np.exp(-a*vv**2/2)
+bins = np.linspace(0, 10*velocity, 60)
+vv = np.linspace(0, 10*velocity, 1000)
+mbeta = (velocity**2/12 - gravity/4)**(-1)
+fv = mbeta*vv*np.exp(-mbeta*vv**2/2)
 
 #Initial conditions
 r = torch.rand((2, n_particles)).to(device)
